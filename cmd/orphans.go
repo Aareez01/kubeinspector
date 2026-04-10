@@ -35,6 +35,8 @@ func newOrphansCmd(opts *GlobalOptions) *cobra.Command {
 				func() ([]orphans.Finding, error) { return orphans.FindOrphanPVCs(ctx, client, o) },
 				func() ([]orphans.Finding, error) { return orphans.FindOrphanConfigMaps(ctx, client, o) },
 				func() ([]orphans.Finding, error) { return orphans.FindOrphanSecrets(ctx, client, o) },
+				func() ([]orphans.Finding, error) { return orphans.FindOrphanReplicaSets(ctx, client, o) },
+				func() ([]orphans.Finding, error) { return orphans.FindOrphanServices(ctx, client, o) },
 			} {
 				f, err := step()
 				if err != nil {
