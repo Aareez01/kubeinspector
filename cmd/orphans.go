@@ -27,11 +27,22 @@ func newOrphansCmd(opts *GlobalOptions) *cobra.Command {
 				ns = ""
 			}
 
-			findings, err := orphans.FindOrphanPVCs(cmd.Context(), client, orphans.Options{Namespace: ns})
-			if err != nil {
-				return err
+			o := orphans.Options{Namespace: ns}
+			ctx := cmd.Context()
+
+			var all []orphans.Finding
+			for _, step := range []func() ([]orphans.Finding, error){
+				func() ([]orphans.Finding, error) { return orphans.FindOrphanPVCs(ctx, client, o) },
+				func() ([]orphans.Finding, error) { return orphans.FindOrphanConfigMaps(ctx, client, o) },
+				func() ([]orphans.Finding, error) { return orphans.FindOrphanSecrets(ctx, client, o) },
+			} {
+				f, err := step()
+				if err != nil {
+					return err
+				}
+				all = append(all, f...)
 			}
-			return renderFindings(cmd.OutOrStdout(), findings)
+			return renderFindings(cmd.OutOrStdout(), all)
 		},
 	}
 }
