@@ -8,6 +8,7 @@ import (
 	"github.com/Aareez01/kubeinspector/pkg/cost"
 	"github.com/Aareez01/kubeinspector/pkg/ingress"
 	"github.com/Aareez01/kubeinspector/pkg/orphans"
+	"github.com/Aareez01/kubeinspector/pkg/security"
 )
 
 func sample() *Report {
@@ -18,6 +19,9 @@ func sample() *Report {
 		Ingress: []ingress.Finding{
 			{Severity: ingress.SeverityWarning, Namespace: "web", Ingress: "site", Message: "no spec.tls"},
 			{Severity: ingress.SeverityError, Namespace: "web", Ingress: "site", Message: "TLS secret missing"},
+		},
+		Security: []security.Finding{
+			{Severity: security.SeverityCritical, Kind: "Pod", Namespace: "app", Name: "api", Container: "app", Check: "privileged", Message: "runs privileged"},
 		},
 		Cost: &cost.Report{
 			Currency: "USD",
@@ -35,7 +39,7 @@ func TestRender_textContainsSections(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	for _, want := range []string{"Orphaned resources", "Ingress issues", "Cost estimate", "stale", "site"} {
+	for _, want := range []string{"Orphaned resources", "Ingress issues", "Security", "Cost estimate", "stale", "site", "privileged"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("text output missing %q\n--- got ---\n%s", want, out)
 		}
@@ -48,7 +52,7 @@ func TestRender_markdownTables(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	for _, want := range []string{"# kubeinspector audit", "| Kind |", "| Severity |", "Total (USD)"} {
+	for _, want := range []string{"# kubeinspector audit", "| Kind |", "| Severity |", "## Security", "privileged", "Total (USD)"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("markdown output missing %q", want)
 		}
@@ -82,6 +86,8 @@ func TestExitCode(t *testing.T) {
 		{"orphans → warning", &Report{Orphans: []orphans.Finding{{Kind: "PVC"}}}, 1},
 		{"ingress warn → 1", &Report{Ingress: []ingress.Finding{{Severity: ingress.SeverityWarning}}}, 1},
 		{"ingress error → 2", &Report{Ingress: []ingress.Finding{{Severity: ingress.SeverityError}}}, 2},
+		{"security critical → 2", &Report{Security: []security.Finding{{Severity: security.SeverityCritical}}}, 2},
+		{"security warning → 1", &Report{Security: []security.Finding{{Severity: security.SeverityWarning}}}, 1},
 		{"mixed → 2", &Report{
 			Orphans: []orphans.Finding{{Kind: "PVC"}},
 			Ingress: []ingress.Finding{{Severity: ingress.SeverityError}},

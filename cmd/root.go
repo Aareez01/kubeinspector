@@ -16,10 +16,11 @@ func NewRootCmd() *cobra.Command {
 
 	root := &cobra.Command{
 		Use:   "kubeinspector",
-		Short: "Audit Kubernetes clusters for orphans, cost, and ingress issues",
-		Long: `kubeinspector scans a Kubernetes cluster for cruft and misconfigurations:
-orphaned PVCs and ConfigMaps, Ingresses with missing TLS or duplicate hosts,
-and a rough per-namespace cost estimate based on resource requests.`,
+		Short: "Audit Kubernetes clusters for orphans, cost, ingress, and security issues",
+		Long: `kubeinspector scans a Kubernetes cluster for cruft, misconfigurations,
+and security issues: orphaned PVCs and ConfigMaps, Ingresses with missing TLS
+or duplicate hosts, a rough per-namespace cost estimate, and workload/RBAC
+security audit.`,
 		SilenceUsage: true,
 	}
 
@@ -31,6 +32,7 @@ and a rough per-namespace cost estimate based on resource requests.`,
 	root.AddCommand(newOrphansCmd(opts))
 	root.AddCommand(newIngressCmd(opts))
 	root.AddCommand(newCostCmd(opts))
+	root.AddCommand(newSecurityCmd(opts))
 	root.AddCommand(newAuditCmd(opts))
 	root.AddCommand(newVersionCmd())
 
