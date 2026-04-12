@@ -1,8 +1,10 @@
 # kubeinspector
 
-A small CLI that audits a Kubernetes cluster for cruft and misconfigurations —
-orphaned resources, ingress problems, and a rough per-namespace cost estimate.
-One static binary, no agents, no dashboards, no cluster components.
+A small CLI that audits a Kubernetes cluster for cruft, misconfigurations, and
+security issues — orphaned resources, ingress problems, a rough per-namespace
+cost estimate, and a security audit that catches everything from privileged
+containers to crypto miners. One static binary, no agents, no dashboards, no
+cluster components.
 
 > **Status:** early but usable. All core checks are implemented and tested.
 > Expect flags and output formats to stabilize over the next few releases.
@@ -19,6 +21,9 @@ Clusters accumulate junk over time:
   that no longer exist
 - Old ReplicaSets scaled to zero that nobody bothered to clean up
 - Namespaces that quietly consume a surprising fraction of the compute bill
+- Containers running privileged, as root, or with dangerous capabilities
+- Crypto miners hiding in your cluster behind innocuous-looking pod names
+- RBAC grants that give cluster-admin to non-system accounts
 
 `kubeinspector` scans for all of this and prints a focused report. It's
 designed to be run on-demand by a human, or in CI as a gate on a PR that
@@ -61,6 +66,7 @@ Commands:
   orphans     Find unused PVCs, ConfigMaps, Secrets, ReplicaSets, Services
   ingress     Audit Ingresses for duplicate hosts, missing TLS, broken backends
   cost        Rough per-namespace monthly cost estimate from resource requests
+  security    Audit pods and RBAC for security issues, crypto miners, resource abuse
   audit       Run all checks and produce a combined report
   version     Print the version
 
@@ -126,6 +132,44 @@ currency: USD
 
 This is a **rough** estimate based on pod requests and PVC storage requests,
 not actual usage. Use it as a signal, not as a billing source of truth.
+
+### Security audit
+
+```sh
+$ kubeinspector security -A
+SEVERITY  KIND                NAMESPACE  NAME         CONTAINER  CHECK                 MESSAGE
+critical  Pod                 app        api-server   api        privileged             container runs in privileged mode
+critical  Pod                 app        api-server   api        dangerous-cap          adds dangerous capability SYS_ADMIN
+critical  Pod                 mining     suspicious   worker     crypto-miner-image     image "xmrig/xmrig:latest" matches known mining software
+critical  Pod                 mining     suspicious   worker     crypto-miner-command   command/args contain mining-related pattern "stratum+tcp://"
+warning   Pod                 web        frontend     nginx      run-as-root            container may run as root
+warning   Pod                 web        frontend     nginx      writable-rootfs        root filesystem is writable
+warning   Pod                 web        frontend     nginx      no-cpu-limit           no CPU limit set — can starve neighboring pods
+warning   Pod                 web        frontend     nginx      secret-in-env          secret "db-creds" exposed via env var DB_PASSWORD
+warning   Pod                 data       analytics    spark      excessive-cpu-request  requests 16.0 CPU cores (threshold: 8)
+warning   Role                app                     dev-all                           rule grants wildcard permissions: resources=[*] verbs=[get list]
+critical  ClusterRoleBinding                          dev-admin  cluster-admin-binding  User "intern@example.com" bound to cluster-admin
+```
+
+**Checks performed:**
+
+| Category | Check | Severity |
+|---|---|---|
+| Pod | Privileged containers | critical |
+| Pod | Running as root | warning |
+| Pod | Host network/PID/IPC | critical |
+| Pod | Dangerous capabilities (SYS_ADMIN, NET_ADMIN, NET_RAW, ALL, ...) | critical |
+| Pod | Writable root filesystem | warning |
+| Pod | Missing CPU/memory limits | warning |
+| Pod | Default ServiceAccount with auto-mounted token | warning |
+| Pod | Secrets exposed via env vars | warning |
+| Miner | Known crypto mining images (xmrig, cpuminer, etc.) | critical |
+| Miner | Mining-related environment variables (POOL, WALLET, STRATUM) | warning |
+| Miner | Mining-related commands/args (stratum://, --algo, pool URLs) | critical |
+| Resource | Excessive CPU/memory requests or limits (>8 cores / >32 GiB) | warning |
+| Resource | Huge limit/request ratio (>10x — burst can starve neighbors) | warning |
+| RBAC | Non-system cluster-admin bindings | critical |
+| RBAC | Roles with wildcard permissions | warning |
 
 ### Run everything at once
 

@@ -8,6 +8,7 @@ import (
 	"github.com/Aareez01/kubeinspector/pkg/kube"
 	"github.com/Aareez01/kubeinspector/pkg/orphans"
 	"github.com/Aareez01/kubeinspector/pkg/report"
+	"github.com/Aareez01/kubeinspector/pkg/security"
 	"github.com/spf13/cobra"
 )
 
@@ -62,6 +63,20 @@ or issue comment in CI.`,
 				return err
 			}
 			r.Ingress = ingressFindings
+
+			secOpts := security.Options{Namespace: ns}
+			for _, step := range []func() ([]security.Finding, error){
+				func() ([]security.Finding, error) { return security.AuditPods(ctx, client, secOpts) },
+				func() ([]security.Finding, error) { return security.AuditRBAC(ctx, client, secOpts) },
+				func() ([]security.Finding, error) { return security.AuditMiners(ctx, client, secOpts) },
+				func() ([]security.Finding, error) { return security.AuditResourceAbuse(ctx, client, secOpts) },
+			} {
+				f, err := step()
+				if err != nil {
+					return err
+				}
+				r.Security = append(r.Security, f...)
+			}
 
 			pricing, err := cost.LoadPricing(pricingPath)
 			if err != nil {

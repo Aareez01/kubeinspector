@@ -13,13 +13,15 @@ import (
 	"github.com/Aareez01/kubeinspector/pkg/cost"
 	"github.com/Aareez01/kubeinspector/pkg/ingress"
 	"github.com/Aareez01/kubeinspector/pkg/orphans"
+	"github.com/Aareez01/kubeinspector/pkg/security"
 )
 
 // Report is the combined output of an audit run.
 type Report struct {
-	Orphans []orphans.Finding `json:"orphans,omitempty"`
-	Ingress []ingress.Finding `json:"ingress,omitempty"`
-	Cost    *cost.Report      `json:"cost,omitempty"`
+	Orphans  []orphans.Finding  `json:"orphans,omitempty"`
+	Ingress  []ingress.Finding  `json:"ingress,omitempty"`
+	Security []security.Finding `json:"security,omitempty"`
+	Cost     *cost.Report       `json:"cost,omitempty"`
 }
 
 // Format selects the output format.
@@ -59,6 +61,14 @@ func ExitCode(r *Report) int {
 		case ingress.SeverityError:
 			hasError = true
 		case ingress.SeverityWarning:
+			hasWarning = true
+		}
+	}
+	for _, f := range r.Security {
+		switch f.Severity {
+		case security.SeverityCritical:
+			hasError = true
+		case security.SeverityWarning:
 			hasWarning = true
 		}
 	}
@@ -106,6 +116,19 @@ func renderText(w io.Writer, r *Report) error {
 		tw.Flush()
 	}
 
+	fmt.Fprintln(w, "\n== Security ==")
+	if len(r.Security) == 0 {
+		fmt.Fprintln(w, "  none")
+	} else {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "  SEVERITY\tKIND\tNAMESPACE\tNAME\tCONTAINER\tCHECK\tMESSAGE")
+		for _, f := range r.Security {
+			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				f.Severity, f.Kind, f.Namespace, f.Name, f.Container, f.Check, f.Message)
+		}
+		tw.Flush()
+	}
+
 	fmt.Fprintln(w, "\n== Cost estimate ==")
 	if r.Cost == nil || len(r.Cost.Namespaces) == 0 {
 		fmt.Fprintln(w, "  no workloads")
@@ -148,6 +171,19 @@ func renderMarkdown(w io.Writer, r *Report) error {
 		b.WriteString("|---|---|---|---|---|\n")
 		for _, f := range r.Ingress {
 			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", f.Severity, f.Namespace, f.Ingress, f.Rule, f.Message)
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("## Security\n\n")
+	if len(r.Security) == 0 {
+		b.WriteString("_None_\n\n")
+	} else {
+		b.WriteString("| Severity | Kind | Namespace | Name | Container | Check | Message |\n")
+		b.WriteString("|---|---|---|---|---|---|---|\n")
+		for _, f := range r.Security {
+			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s |\n",
+				f.Severity, f.Kind, f.Namespace, f.Name, f.Container, f.Check, f.Message)
 		}
 		b.WriteString("\n")
 	}
