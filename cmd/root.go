@@ -34,6 +34,7 @@ security audit.`,
 	root.AddCommand(newCostCmd(opts))
 	root.AddCommand(newSecurityCmd(opts))
 	root.AddCommand(newWorkloadCmd(opts))
+	root.AddCommand(newNodeCmd(opts))
 	root.AddCommand(newAuditCmd(opts))
 	root.AddCommand(newVersionCmd())
 
