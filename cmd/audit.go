@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 
+	"github.com/Aareez01/kubeinspector/pkg/bestpractice"
 	"github.com/Aareez01/kubeinspector/pkg/cost"
 	"github.com/Aareez01/kubeinspector/pkg/ingress"
 	"github.com/Aareez01/kubeinspector/pkg/kube"
@@ -99,6 +100,21 @@ or issue comment in CI.`,
 				return err
 			}
 			r.Node = nodeFindings
+
+			bpOpts := bestpractice.Options{Namespace: ns}
+			for _, step := range []func() ([]bestpractice.Finding, error){
+				func() ([]bestpractice.Finding, error) { return bestpractice.AuditReliability(ctx, client, bpOpts) },
+				func() ([]bestpractice.Finding, error) { return bestpractice.AuditPodImages(ctx, client, bpOpts) },
+				func() ([]bestpractice.Finding, error) { return bestpractice.AuditNetworkPolicies(ctx, client, bpOpts) },
+				func() ([]bestpractice.Finding, error) { return bestpractice.AuditNodePorts(ctx, client, bpOpts) },
+				func() ([]bestpractice.Finding, error) { return bestpractice.AuditLoadBalancers(ctx, client, bpOpts) },
+			} {
+				f, err := step()
+				if err != nil {
+					return err
+				}
+				r.BestPractice = append(r.BestPractice, f...)
+			}
 
 			pricing, err := cost.LoadPricing(pricingPath)
 			if err != nil {
