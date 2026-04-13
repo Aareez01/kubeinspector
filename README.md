@@ -1,7 +1,8 @@
 # kubeinspector
 
 A small CLI that audits a Kubernetes cluster for cruft, misconfigurations, and
-security issues — orphaned resources, ingress problems, a rough per-namespace
+security issues — orphaned resources, ingress problems, workload health, node
+conditions, networking gaps, reliability best practices, a rough per-namespace
 cost estimate, and a security audit that catches everything from privileged
 containers to crypto miners. One static binary, no agents, no dashboards, no
 cluster components.
@@ -24,6 +25,10 @@ Clusters accumulate junk over time:
 - Containers running privileged, as root, or with dangerous capabilities
 - Crypto miners hiding in your cluster behind innocuous-looking pod names
 - RBAC grants that give cluster-admin to non-system accounts
+- Deployments stuck at zero ready replicas, CrashLooping pods, failed jobs
+- Nodes reporting NotReady, MemoryPressure, or overcommitted resources
+- Single-replica deployments without PDBs, pods missing health probes
+- Services exposed via NodePort or public LoadBalancer unintentionally
 
 `kubeinspector` scans for all of this and prints a focused report. It's
 designed to be run on-demand by a human, or in CI as a gate on a PR that
@@ -63,12 +68,15 @@ go build -o kubeinspector .
 kubeinspector [command] [flags]
 
 Commands:
-  orphans     Find unused PVCs, ConfigMaps, Secrets, ReplicaSets, Services
-  ingress     Audit Ingresses for duplicate hosts, missing TLS, broken backends
-  cost        Rough per-namespace monthly cost estimate from resource requests
-  security    Audit pods and RBAC for security issues, crypto miners, resource abuse
-  audit       Run all checks and produce a combined report
-  version     Print the version
+  orphans        Find unused PVCs, ConfigMaps, Secrets, ReplicaSets, Services
+  ingress        Audit Ingresses for duplicate hosts, missing TLS, broken backends
+  cost           Rough per-namespace monthly cost estimate from resource requests
+  security       Audit pods and RBAC for security issues, crypto miners, resource abuse
+  workload       Detect unhealthy deployments, CrashLooping pods, failed jobs
+  node           Check node conditions, resource overcommit, problematic taints
+  bestpractice   Check reliability best practices and networking gaps
+  audit          Run all checks and produce a combined report
+  version        Print the version
 
 Global flags:
   -n, --namespace string    namespace to scan (default: current context)
@@ -170,6 +178,81 @@ critical  ClusterRoleBinding                          dev-admin  cluster-admin-b
 | Resource | Huge limit/request ratio (>10x — burst can starve neighbors) | warning |
 | RBAC | Non-system cluster-admin bindings | critical |
 | RBAC | Roles with wildcard permissions | warning |
+
+### Workload health
+
+```sh
+$ kubeinspector workload -n app
+SEVERITY  KIND        NAMESPACE  NAME           CHECK               MESSAGE
+critical  Pod         app        api-abc123     crashloop           container "api" in CrashLoopBackOff (12 restarts, exit code 137)
+critical  Deployment  app        api            zero-ready          0/3 replicas ready
+warning   Service     app        api-internal   selector-mismatch   selector {app=api-v1} matches 0 ready pods (stale selector?)
+critical  Job         app        migration-v2   job-failed          job failed (1/3 completions, 5 failures)
+```
+
+**Checks performed:**
+
+| Check | Severity | Description |
+|---|---|---|
+| CrashLoopBackOff | critical | Pods stuck in crash loop with restart count and exit code |
+| Pending pods | warning | Pods stuck Pending with root cause (Unschedulable, image pull, etc.) |
+| Zero-ready deploys | critical | Deployments with 0 ready replicas (skips intentional scale-to-zero) |
+| Selector mismatch | warning | Services whose label selector matches no running pods |
+| Failed jobs | critical | Jobs exceeding their backoff limit |
+| Stuck jobs | warning | Active jobs running longer than 1 hour |
+| CronJob last failed | warning | CronJobs whose most recent child job failed |
+
+### Node health
+
+```sh
+$ kubeinspector node
+SEVERITY  NODE                   CHECK            MESSAGE
+critical  worker-3               NotReady         node condition NotReady is True
+warning   worker-1               MemoryPressure   node condition MemoryPressure is True
+warning   worker-2               cpu-overcommit   CPU overcommitted: 7.50 requested / 8.00 allocatable (94%)
+warning   gpu-pool-0             NoSchedule       taint gpu=true:NoSchedule may be blocking pending pods
+```
+
+**Checks performed:**
+
+| Check | Severity | Description |
+|---|---|---|
+| NotReady | critical | Node not in Ready condition |
+| MemoryPressure | warning | Node under memory pressure |
+| DiskPressure | warning | Node under disk pressure |
+| PIDPressure | warning | Node under PID pressure |
+| CPU overcommit | warning | Sum of pod CPU requests exceeds 90% of allocatable |
+| Memory overcommit | warning | Sum of pod memory requests exceeds 90% of allocatable |
+| NoSchedule/NoExecute taints | warning | Taints that may block pending pods |
+
+### Best practices
+
+```sh
+$ kubeinspector bestpractice -n app
+SEVERITY  KIND        NAMESPACE  NAME       CHECK              MESSAGE
+warning   Deployment  app        api        no-liveness-probe  container "api" has no liveness probe
+warning   Deployment  app        api        no-readiness-probe container "api" has no readiness probe
+warning   Deployment  app        api        latest-image-tag   container "api" uses image "nginx:latest" (no pinned tag)
+warning   Deployment  app        api        single-replica     only 1 replica — no redundancy during rollouts or node failure
+warning   Deployment  app        api        no-pdb             no PodDisruptionBudget covers this Deployment
+warning   Pod         app        worker-0   no-network-policy  no NetworkPolicy applies to this pod
+warning   Service     app        web        nodeport-exposed   NodePort service exposes ports [30080→80] on every node
+warning   Service     app        api        public-lb          public LoadBalancer (pending) — verify internet-facing
+```
+
+**Checks performed:**
+
+| Check | Severity | Description |
+|---|---|---|
+| no-liveness-probe | warning | Container has no liveness probe configured |
+| no-readiness-probe | warning | Container has no readiness probe configured |
+| latest-image-tag | warning | Image uses `:latest` tag or no tag at all |
+| single-replica | warning | Deployment has only 1 replica — no HA |
+| no-pdb | warning | Multi-replica Deployment without a PodDisruptionBudget |
+| no-anti-affinity | warning | Multi-replica Deployment with no pod anti-affinity |
+| no-network-policy | warning | Running pod not covered by any NetworkPolicy |
+| nodeport-exposed | warning | NodePort service exposes ports on every cluster node |
+| public-lb | warning | LoadBalancer service without internal annotation |
 
 ### Run everything at once
 
