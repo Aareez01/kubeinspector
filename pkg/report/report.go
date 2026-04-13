@@ -10,6 +10,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/Aareez01/kubeinspector/pkg/bestpractice"
 	"github.com/Aareez01/kubeinspector/pkg/cost"
 	"github.com/Aareez01/kubeinspector/pkg/ingress"
 	"github.com/Aareez01/kubeinspector/pkg/node"
@@ -24,8 +25,9 @@ type Report struct {
 	Ingress  []ingress.Finding  `json:"ingress,omitempty"`
 	Security []security.Finding `json:"security,omitempty"`
 	Workload []workload.Finding `json:"workload,omitempty"`
-	Node     []node.Finding     `json:"node,omitempty"`
-	Cost     *cost.Report       `json:"cost,omitempty"`
+	Node         []node.Finding         `json:"node,omitempty"`
+	BestPractice []bestpractice.Finding `json:"best_practice,omitempty"`
+	Cost         *cost.Report           `json:"cost,omitempty"`
 }
 
 // Format selects the output format.
@@ -89,6 +91,14 @@ func ExitCode(r *Report) int {
 		case node.SeverityCritical:
 			hasError = true
 		case node.SeverityWarning:
+			hasWarning = true
+		}
+	}
+	for _, f := range r.BestPractice {
+		switch f.Severity {
+		case bestpractice.SeverityCritical:
+			hasError = true
+		case bestpractice.SeverityWarning:
 			hasWarning = true
 		}
 	}
@@ -174,6 +184,19 @@ func renderText(w io.Writer, r *Report) error {
 		tw.Flush()
 	}
 
+	fmt.Fprintln(w, "\n== Best practices ==")
+	if len(r.BestPractice) == 0 {
+		fmt.Fprintln(w, "  none")
+	} else {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "  SEVERITY\tKIND\tNAMESPACE\tNAME\tCHECK\tMESSAGE")
+		for _, f := range r.BestPractice {
+			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\t%s\n",
+				f.Severity, f.Kind, f.Namespace, f.Name, f.Check, f.Message)
+		}
+		tw.Flush()
+	}
+
 	fmt.Fprintln(w, "\n== Cost estimate ==")
 	if r.Cost == nil || len(r.Cost.Namespaces) == 0 {
 		fmt.Fprintln(w, "  no workloads")
@@ -254,6 +277,19 @@ func renderMarkdown(w io.Writer, r *Report) error {
 		b.WriteString("|---|---|---|---|\n")
 		for _, f := range r.Node {
 			fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", f.Severity, f.Name, f.Check, f.Message)
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("## Best practices\n\n")
+	if len(r.BestPractice) == 0 {
+		b.WriteString("_None_\n\n")
+	} else {
+		b.WriteString("| Severity | Kind | Namespace | Name | Check | Message |\n")
+		b.WriteString("|---|---|---|---|---|---|\n")
+		for _, f := range r.BestPractice {
+			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n",
+				f.Severity, f.Kind, f.Namespace, f.Name, f.Check, f.Message)
 		}
 		b.WriteString("\n")
 	}
