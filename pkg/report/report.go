@@ -12,6 +12,7 @@ import (
 
 	"github.com/Aareez01/kubeinspector/pkg/cost"
 	"github.com/Aareez01/kubeinspector/pkg/ingress"
+	"github.com/Aareez01/kubeinspector/pkg/node"
 	"github.com/Aareez01/kubeinspector/pkg/orphans"
 	"github.com/Aareez01/kubeinspector/pkg/security"
 	"github.com/Aareez01/kubeinspector/pkg/workload"
@@ -23,6 +24,7 @@ type Report struct {
 	Ingress  []ingress.Finding  `json:"ingress,omitempty"`
 	Security []security.Finding `json:"security,omitempty"`
 	Workload []workload.Finding `json:"workload,omitempty"`
+	Node     []node.Finding     `json:"node,omitempty"`
 	Cost     *cost.Report       `json:"cost,omitempty"`
 }
 
@@ -79,6 +81,14 @@ func ExitCode(r *Report) int {
 		case workload.SeverityCritical:
 			hasError = true
 		case workload.SeverityWarning:
+			hasWarning = true
+		}
+	}
+	for _, f := range r.Node {
+		switch f.Severity {
+		case node.SeverityCritical:
+			hasError = true
+		case node.SeverityWarning:
 			hasWarning = true
 		}
 	}
@@ -152,6 +162,18 @@ func renderText(w io.Writer, r *Report) error {
 		tw.Flush()
 	}
 
+	fmt.Fprintln(w, "\n== Node health ==")
+	if len(r.Node) == 0 {
+		fmt.Fprintln(w, "  none")
+	} else {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "  SEVERITY\tNODE\tCHECK\tMESSAGE")
+		for _, f := range r.Node {
+			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", f.Severity, f.Name, f.Check, f.Message)
+		}
+		tw.Flush()
+	}
+
 	fmt.Fprintln(w, "\n== Cost estimate ==")
 	if r.Cost == nil || len(r.Cost.Namespaces) == 0 {
 		fmt.Fprintln(w, "  no workloads")
@@ -220,6 +242,18 @@ func renderMarkdown(w io.Writer, r *Report) error {
 		for _, f := range r.Security {
 			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s |\n",
 				f.Severity, f.Kind, f.Namespace, f.Name, f.Container, f.Check, f.Message)
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("## Node health\n\n")
+	if len(r.Node) == 0 {
+		b.WriteString("_None_\n\n")
+	} else {
+		b.WriteString("| Severity | Node | Check | Message |\n")
+		b.WriteString("|---|---|---|---|\n")
+		for _, f := range r.Node {
+			fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", f.Severity, f.Name, f.Check, f.Message)
 		}
 		b.WriteString("\n")
 	}

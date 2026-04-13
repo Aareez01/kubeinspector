@@ -6,6 +6,7 @@ import (
 	"github.com/Aareez01/kubeinspector/pkg/cost"
 	"github.com/Aareez01/kubeinspector/pkg/ingress"
 	"github.com/Aareez01/kubeinspector/pkg/kube"
+	"github.com/Aareez01/kubeinspector/pkg/node"
 	"github.com/Aareez01/kubeinspector/pkg/orphans"
 	"github.com/Aareez01/kubeinspector/pkg/report"
 	"github.com/Aareez01/kubeinspector/pkg/security"
@@ -92,6 +93,12 @@ or issue comment in CI.`,
 				}
 				r.Security = append(r.Security, f...)
 			}
+
+			nodeFindings, err := node.Audit(ctx, client, node.Options{})
+			if err != nil {
+				return err
+			}
+			r.Node = nodeFindings
 
 			pricing, err := cost.LoadPricing(pricingPath)
 			if err != nil {
