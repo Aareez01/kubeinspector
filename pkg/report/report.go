@@ -14,6 +14,7 @@ import (
 	"github.com/Aareez01/kubeinspector/pkg/ingress"
 	"github.com/Aareez01/kubeinspector/pkg/orphans"
 	"github.com/Aareez01/kubeinspector/pkg/security"
+	"github.com/Aareez01/kubeinspector/pkg/workload"
 )
 
 // Report is the combined output of an audit run.
@@ -21,6 +22,7 @@ type Report struct {
 	Orphans  []orphans.Finding  `json:"orphans,omitempty"`
 	Ingress  []ingress.Finding  `json:"ingress,omitempty"`
 	Security []security.Finding `json:"security,omitempty"`
+	Workload []workload.Finding `json:"workload,omitempty"`
 	Cost     *cost.Report       `json:"cost,omitempty"`
 }
 
@@ -72,6 +74,14 @@ func ExitCode(r *Report) int {
 			hasWarning = true
 		}
 	}
+	for _, f := range r.Workload {
+		switch f.Severity {
+		case workload.SeverityCritical:
+			hasError = true
+		case workload.SeverityWarning:
+			hasWarning = true
+		}
+	}
 	if len(r.Orphans) > 0 {
 		hasWarning = true
 	}
@@ -112,6 +122,19 @@ func renderText(w io.Writer, r *Report) error {
 		fmt.Fprintln(tw, "  SEVERITY\tNAMESPACE\tINGRESS\tRULE\tMESSAGE")
 		for _, f := range r.Ingress {
 			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\n", f.Severity, f.Namespace, f.Ingress, f.Rule, f.Message)
+		}
+		tw.Flush()
+	}
+
+	fmt.Fprintln(w, "\n== Workload health ==")
+	if len(r.Workload) == 0 {
+		fmt.Fprintln(w, "  none")
+	} else {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "  SEVERITY\tKIND\tNAMESPACE\tNAME\tCHECK\tMESSAGE")
+		for _, f := range r.Workload {
+			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\t%s\n",
+				f.Severity, f.Kind, f.Namespace, f.Name, f.Check, f.Message)
 		}
 		tw.Flush()
 	}
@@ -171,6 +194,19 @@ func renderMarkdown(w io.Writer, r *Report) error {
 		b.WriteString("|---|---|---|---|---|\n")
 		for _, f := range r.Ingress {
 			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", f.Severity, f.Namespace, f.Ingress, f.Rule, f.Message)
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("## Workload health\n\n")
+	if len(r.Workload) == 0 {
+		b.WriteString("_None_\n\n")
+	} else {
+		b.WriteString("| Severity | Kind | Namespace | Name | Check | Message |\n")
+		b.WriteString("|---|---|---|---|---|---|\n")
+		for _, f := range r.Workload {
+			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n",
+				f.Severity, f.Kind, f.Namespace, f.Name, f.Check, f.Message)
 		}
 		b.WriteString("\n")
 	}

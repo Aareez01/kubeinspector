@@ -9,6 +9,7 @@ import (
 	"github.com/Aareez01/kubeinspector/pkg/orphans"
 	"github.com/Aareez01/kubeinspector/pkg/report"
 	"github.com/Aareez01/kubeinspector/pkg/security"
+	"github.com/Aareez01/kubeinspector/pkg/workload"
 	"github.com/spf13/cobra"
 )
 
@@ -56,6 +57,20 @@ or issue comment in CI.`,
 					return err
 				}
 				r.Orphans = append(r.Orphans, f...)
+			}
+
+			wlOpts := workload.Options{Namespace: ns}
+			for _, step := range []func() ([]workload.Finding, error){
+				func() ([]workload.Finding, error) { return workload.AuditPods(ctx, client, wlOpts) },
+				func() ([]workload.Finding, error) { return workload.AuditDeployments(ctx, client, wlOpts) },
+				func() ([]workload.Finding, error) { return workload.AuditServiceSelectors(ctx, client, wlOpts) },
+				func() ([]workload.Finding, error) { return workload.AuditJobs(ctx, client, wlOpts) },
+			} {
+				f, err := step()
+				if err != nil {
+					return err
+				}
+				r.Workload = append(r.Workload, f...)
 			}
 
 			ingressFindings, err := ingress.Audit(ctx, client, ingress.Options{Namespace: ns})
