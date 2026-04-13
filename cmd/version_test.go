@@ -11,7 +11,7 @@ func TestVersionCmd(t *testing.T) {
 
 func TestRootHasSubcommands(t *testing.T) {
 	root := NewRootCmd()
-	want := []string{"orphans", "ingress", "cost", "security", "audit", "version"}
+	want := []string{"orphans", "ingress", "cost", "security", "workload", "audit", "version"}
 	for _, name := range want {
 		found := false
 		for _, c := range root.Commands() {
