@@ -79,22 +79,65 @@ Commands:
   version        Print the version
 
 Global flags:
-  -n, --namespace string    namespace to scan (default: current context)
-  -A, --all-namespaces      scan all namespaces
-  -o, --output string       output format: text, json, markdown (default "text")
-      --kubeconfig string   path to kubeconfig (defaults to $KUBECONFIG or ~/.kube/config)
+  -n, --namespace string         namespace to scan (default: current context)
+  -A, --all-namespaces           scan all namespaces
+  -o, --output string            output format: text, json, markdown (default "text")
+      --kubeconfig string        path to kubeconfig (defaults to $KUBECONFIG or ~/.kube/config)
+      --exclude-namespaces strings  drop findings from these namespaces (globs allowed, e.g. kube-*)
+      --exclude-system           drop findings from well-known system namespaces
+```
+
+### Cutting the noise
+
+On a managed cluster the provider's own DaemonSets (`aws-node`, `kube-proxy`,
+CSI drivers, node-exporter) legitimately run privileged, on the host network,
+and without resource limits. They are real findings, but they are not *your*
+findings, and on a typical EKS cluster they account for most of the criticals:
+
+```sh
+# 37 criticals, most of them vendor DaemonSets
+kubeinspector audit -A
+
+# 10 criticals, all in namespaces you actually control
+kubeinspector audit -A --exclude-system --skip-replicasets
+```
+
+`--exclude-system` is opt-in rather than the default, deliberately: a
+compromised workload can hide in `kube-system` precisely because nobody reads
+that part of the report. Exclude it when you're triaging your own services,
+not when you're hunting for an intruder.
+
+Exclusion is applied to the findings, not to the API queries, so checks that
+work by cross-referencing the whole cluster — "is this ConfigMap referenced by
+any pod?" — stay correct. Cluster-scoped findings (ClusterRoleBindings, nodes)
+have no namespace and are never excluded.
+
+`--exclude-namespaces` takes literal names or globs:
+
+```sh
+kubeinspector audit -A --exclude-namespaces 'kube-*,monitoring,argocd'
 ```
 
 ### Find orphaned resources
 
 ```sh
 $ kubeinspector orphans -n payments
-KIND                   NAMESPACE  NAME                    AGE      REASON
-PersistentVolumeClaim  payments   redis-data-old-0        42d      not mounted by any pod
-ConfigMap              payments   feature-flags-v1        18d      not referenced by any pod or ingress
-Secret                 payments   stripe-staging-key      91d      not referenced by any pod or ingress
-ReplicaSet             payments   api-7c9f8b4d            14d      scaled to zero, owned by Deployment (rollback history)
-Service                payments   api-canary              22d      selector matches no ready pods
+SEVERITY  KIND                   NAMESPACE  NAME                AGE  REASON
+warning   PersistentVolumeClaim  payments   redis-data-old-0    42d  not mounted by any pod
+warning   ConfigMap              payments   feature-flags-v1    18d  not referenced by any pod or ingress
+warning   Secret                 payments   stripe-staging-key  91d  not referenced by any pod or ingress
+warning   Service                payments   api-canary          22d  selector matches no ready pods
+info      ReplicaSet             payments   api-7c9f8b4d        14d  scaled to zero, owned by Deployment (rollback history)
+```
+
+Orphans are never errors — nothing is broken, the resource is just
+unreferenced. Scaled-to-zero ReplicaSets are reported at `info` because
+Kubernetes creates them on every rollout by design and prunes them at
+`revisionHistoryLimit`; they do not affect the exit code, and they are usually
+the bulk of the output on a busy cluster:
+
+```sh
+kubeinspector orphans -A --skip-replicasets
 ```
 
 Exempt a resource from being flagged by annotating it:
@@ -304,6 +347,10 @@ jobs:
 - **Opt-out via annotation.** Anything with `kubeinspector.io/keep=true` is
   skipped, so you can silence individual intentional exceptions without
   disabling a whole check.
+- **Quiet stderr.** Apiserver deprecation warnings are suppressed. Every check
+  lists cluster-wide, so a single deprecated API would otherwise print one
+  warning per request and bury the report; those warnings describe the
+  cluster's API versions, not anything this tool found.
 
 ---
 

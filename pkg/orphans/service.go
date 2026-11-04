@@ -47,6 +47,7 @@ func FindOrphanServices(ctx context.Context, client kubernetes.Interface, opts O
 		ep, err := client.CoreV1().Endpoints(svc.Namespace).Get(ctx, svc.Name, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
 			findings = append(findings, Finding{
+				Severity:  SeverityWarning,
 				Kind:      "Service",
 				Namespace: svc.Namespace,
 				Name:      svc.Name,
@@ -62,6 +63,7 @@ func FindOrphanServices(ctx context.Context, client kubernetes.Interface, opts O
 			continue
 		}
 		findings = append(findings, Finding{
+			Severity:  SeverityWarning,
 			Kind:      "Service",
 			Namespace: svc.Namespace,
 			Name:      svc.Name,

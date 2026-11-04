@@ -22,6 +22,13 @@ func NewClient(kubeconfigPath string) (kubernetes.Interface, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+	// Every check lists cluster-wide, so a single deprecated-API warning from
+	// the apiserver (for example "v1 Endpoints is deprecated in v1.33+") is
+	// re-emitted once per request and drowns the report in stderr noise. The
+	// warnings describe the cluster's API versions, not anything this tool
+	// found, so they are dropped rather than deduplicated.
+	cfg.WarningHandler = rest.NoWarnings{}
+
 	cs, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return nil, "", fmt.Errorf("build clientset: %w", err)

@@ -68,6 +68,7 @@ func FindOrphanSecrets(ctx context.Context, client kubernetes.Interface, opts Op
 			continue
 		}
 		findings = append(findings, Finding{
+			Severity:  SeverityWarning,
 			Kind:      "Secret",
 			Namespace: s.Namespace,
 			Name:      s.Name,
@@ -110,6 +111,7 @@ func filterConfigMapOrphans(items []corev1.ConfigMap, referenced map[string]bool
 			continue
 		}
 		findings = append(findings, Finding{
+			Severity:  SeverityWarning,
 			Kind:      "ConfigMap",
 			Namespace: cm.Namespace,
 			Name:      cm.Name,

@@ -44,6 +44,7 @@ func FindOrphanReplicaSets(ctx context.Context, client kubernetes.Interface, opt
 			continue
 		}
 		findings = append(findings, Finding{
+			Severity:  SeverityInfo,
 			Kind:      "ReplicaSet",
 			Namespace: rs.Namespace,
 			Name:      rs.Name,
