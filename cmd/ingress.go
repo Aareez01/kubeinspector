@@ -31,7 +31,7 @@ func newIngressCmd(opts *GlobalOptions) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return renderIngressFindings(cmd.OutOrStdout(), findings)
+			return renderIngressFindings(cmd.OutOrStdout(), filterIngress(findings, nsFilter(opts)))
 		},
 	}
 }

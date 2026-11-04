@@ -9,6 +9,13 @@ type GlobalOptions struct {
 	Namespace  string
 	Output     string
 	AllNS      bool
+
+	// ExcludeNamespaces drops findings from matching namespaces. Entries are
+	// literal names or globs ("kube-*").
+	ExcludeNamespaces []string
+
+	// ExcludeSystem additionally drops filter.SystemNamespaces.
+	ExcludeSystem bool
 }
 
 func NewRootCmd() *cobra.Command {
@@ -28,6 +35,8 @@ security audit.`,
 	root.PersistentFlags().StringVarP(&opts.Namespace, "namespace", "n", "", "namespace to scan (default: current context namespace)")
 	root.PersistentFlags().BoolVarP(&opts.AllNS, "all-namespaces", "A", false, "scan all namespaces")
 	root.PersistentFlags().StringVarP(&opts.Output, "output", "o", "text", "output format: text, json, markdown")
+	root.PersistentFlags().StringSliceVar(&opts.ExcludeNamespaces, "exclude-namespaces", nil, "drop findings from these namespaces (comma-separated; globs allowed, e.g. kube-*)")
+	root.PersistentFlags().BoolVar(&opts.ExcludeSystem, "exclude-system", false, "drop findings from well-known system namespaces (kube-system, calico-system, ...)")
 
 	root.AddCommand(newOrphansCmd(opts))
 	root.AddCommand(newIngressCmd(opts))

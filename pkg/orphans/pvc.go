@@ -52,6 +52,7 @@ func FindOrphanPVCs(ctx context.Context, client kubernetes.Interface, opts Optio
 			continue
 		}
 		findings = append(findings, Finding{
+			Severity:  SeverityWarning,
 			Kind:      "PersistentVolumeClaim",
 			Namespace: pvc.Namespace,
 			Name:      pvc.Name,

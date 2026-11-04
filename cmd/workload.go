@@ -36,7 +36,7 @@ func newWorkloadCmd(opts *GlobalOptions) *cobra.Command {
 				}
 				all = append(all, f...)
 			}
-			return renderWorkloadFindings(cmd.OutOrStdout(), all)
+			return renderWorkloadFindings(cmd.OutOrStdout(), filterWorkload(all, nsFilter(opts)))
 		},
 	}
 }

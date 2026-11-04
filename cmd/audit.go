@@ -17,6 +17,7 @@ import (
 
 func newAuditCmd(opts *GlobalOptions) *cobra.Command {
 	var pricingPath string
+	var skipReplicaSets bool
 	cmd := &cobra.Command{
 		Use:   "audit",
 		Short: "Run all checks and produce a combined report",
@@ -44,16 +45,11 @@ or issue comment in CI.`,
 			}
 
 			ctx := cmd.Context()
+			nsf := nsFilter(opts)
 			r := &report.Report{}
 
 			orphanOpts := orphans.Options{Namespace: ns}
-			for _, step := range []func() ([]orphans.Finding, error){
-				func() ([]orphans.Finding, error) { return orphans.FindOrphanPVCs(ctx, client, orphanOpts) },
-				func() ([]orphans.Finding, error) { return orphans.FindOrphanConfigMaps(ctx, client, orphanOpts) },
-				func() ([]orphans.Finding, error) { return orphans.FindOrphanSecrets(ctx, client, orphanOpts) },
-				func() ([]orphans.Finding, error) { return orphans.FindOrphanReplicaSets(ctx, client, orphanOpts) },
-				func() ([]orphans.Finding, error) { return orphans.FindOrphanServices(ctx, client, orphanOpts) },
-			} {
+			for _, step := range orphanSteps(ctx, client, orphanOpts, skipReplicaSets) {
 				f, err := step()
 				if err != nil {
 					return err
@@ -126,6 +122,15 @@ or issue comment in CI.`,
 			}
 			r.Cost = costReport
 
+			// Namespace exclusion is applied once, after every check has run,
+			// so cross-namespace reference checks still see the whole cluster.
+			r.Orphans = filterOrphans(r.Orphans, nsf)
+			r.Ingress = filterIngress(r.Ingress, nsf)
+			r.Security = filterSecurity(r.Security, nsf)
+			r.Workload = filterWorkload(r.Workload, nsf)
+			r.BestPractice = filterBestPractice(r.BestPractice, nsf)
+			r.Cost = filterCost(r.Cost, nsf)
+
 			if err := report.Render(cmd.OutOrStdout(), r, report.Format(opts.Output)); err != nil {
 				return err
 			}
@@ -134,5 +139,7 @@ or issue comment in CI.`,
 		},
 	}
 	cmd.Flags().StringVar(&pricingPath, "pricing", "", "path to pricing.yaml (defaults to built-in rates)")
+	cmd.Flags().BoolVar(&skipReplicaSets, "skip-replicasets", false,
+		"skip scaled-to-zero ReplicaSets (Deployment rollback history, usually the bulk of the findings)")
 	return cmd
 }

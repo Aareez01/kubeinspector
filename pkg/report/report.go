@@ -102,8 +102,13 @@ func ExitCode(r *Report) int {
 			hasWarning = true
 		}
 	}
-	if len(r.Orphans) > 0 {
-		hasWarning = true
+	// Orphans are never errors. Info-level orphans (scaled-to-zero
+	// ReplicaSets) are normal Deployment rollback history, so they must not
+	// move the exit code — otherwise every healthy cluster fails CI.
+	for _, f := range r.Orphans {
+		if f.Severity == orphans.SeverityWarning {
+			hasWarning = true
+		}
 	}
 	switch {
 	case hasError:
@@ -127,9 +132,9 @@ func renderText(w io.Writer, r *Report) error {
 		fmt.Fprintln(w, "  none")
 	} else {
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(tw, "  KIND\tNAMESPACE\tNAME\tAGE\tREASON")
+		fmt.Fprintln(tw, "  SEVERITY\tKIND\tNAMESPACE\tNAME\tAGE\tREASON")
 		for _, f := range r.Orphans {
-			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\n", f.Kind, f.Namespace, f.Name, f.Age, f.Reason)
+			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\t%s\n", f.Severity, f.Kind, f.Namespace, f.Name, f.Age, f.Reason)
 		}
 		tw.Flush()
 	}
@@ -223,10 +228,10 @@ func renderMarkdown(w io.Writer, r *Report) error {
 	if len(r.Orphans) == 0 {
 		b.WriteString("_None_\n\n")
 	} else {
-		b.WriteString("| Kind | Namespace | Name | Age | Reason |\n")
-		b.WriteString("|---|---|---|---|---|\n")
+		b.WriteString("| Severity | Kind | Namespace | Name | Age | Reason |\n")
+		b.WriteString("|---|---|---|---|---|---|\n")
 		for _, f := range r.Orphans {
-			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", f.Kind, f.Namespace, f.Name, f.Age, f.Reason)
+			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n", f.Severity, f.Kind, f.Namespace, f.Name, f.Age, f.Reason)
 		}
 		b.WriteString("\n")
 	}

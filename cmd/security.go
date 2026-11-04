@@ -50,7 +50,7 @@ roles with wildcard permissions.`,
 				}
 				all = append(all, f...)
 			}
-			return renderSecurityFindings(cmd.OutOrStdout(), all)
+			return renderSecurityFindings(cmd.OutOrStdout(), filterSecurity(all, nsFilter(opts)))
 		},
 	}
 }

@@ -83,13 +83,19 @@ func TestExitCode(t *testing.T) {
 		want int
 	}{
 		{"clean", &Report{}, 0},
-		{"orphans → warning", &Report{Orphans: []orphans.Finding{{Kind: "PVC"}}}, 1},
+		{"orphan warning → 1", &Report{Orphans: []orphans.Finding{
+			{Kind: "PVC", Severity: orphans.SeverityWarning}}}, 1},
+		{"orphan info → 0", &Report{Orphans: []orphans.Finding{
+			{Kind: "ReplicaSet", Severity: orphans.SeverityInfo}}}, 0},
+		{"orphan info alongside warning → 1", &Report{Orphans: []orphans.Finding{
+			{Kind: "ReplicaSet", Severity: orphans.SeverityInfo},
+			{Kind: "PVC", Severity: orphans.SeverityWarning}}}, 1},
 		{"ingress warn → 1", &Report{Ingress: []ingress.Finding{{Severity: ingress.SeverityWarning}}}, 1},
 		{"ingress error → 2", &Report{Ingress: []ingress.Finding{{Severity: ingress.SeverityError}}}, 2},
 		{"security critical → 2", &Report{Security: []security.Finding{{Severity: security.SeverityCritical}}}, 2},
 		{"security warning → 1", &Report{Security: []security.Finding{{Severity: security.SeverityWarning}}}, 1},
 		{"mixed → 2", &Report{
-			Orphans: []orphans.Finding{{Kind: "PVC"}},
+			Orphans: []orphans.Finding{{Kind: "PVC", Severity: orphans.SeverityWarning}},
 			Ingress: []ingress.Finding{{Severity: ingress.SeverityError}},
 		}, 2},
 	}

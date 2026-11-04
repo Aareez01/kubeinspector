@@ -53,7 +53,7 @@ Override with --pricing pointing at a YAML file like:
 			if err != nil {
 				return err
 			}
-			return renderCostReport(cmd.OutOrStdout(), report)
+			return renderCostReport(cmd.OutOrStdout(), filterCost(report, nsFilter(opts)))
 		},
 	}
 	cmd.Flags().StringVar(&pricingPath, "pricing", "", "path to pricing.yaml (defaults to built-in rates)")

@@ -38,7 +38,7 @@ func newBestPracticeCmd(opts *GlobalOptions) *cobra.Command {
 				}
 				all = append(all, f...)
 			}
-			return renderBPFindings(cmd.OutOrStdout(), all)
+			return renderBPFindings(cmd.OutOrStdout(), filterBestPractice(all, nsFilter(opts)))
 		},
 	}
 }
