@@ -6,7 +6,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "0.2.0-dev"
+// version is overridable at build time:
+//
+//	go build -ldflags "-X github.com/Aareez01/kubeinspector/cmd.version=$(git describe --tags)"
+var version = "0.3.0"
 
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
